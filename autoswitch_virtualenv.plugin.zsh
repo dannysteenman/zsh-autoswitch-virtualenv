@@ -74,6 +74,19 @@ function _get_venv_name() {
     printf "%s" "$venv_name"
 }
 
+# Function to ensure virtualenv bin is at the start of PATH
+function _ensure_virtualenv_path() {
+    # Remove the current virtualenv from PATH if it exists
+    if [[ -n "$VIRTUAL_ENV" ]]; then
+        PATH=:$PATH:
+        PATH=${PATH//:$VIRTUAL_ENV\/bin:/:}
+        PATH=${PATH#:}
+        PATH=${PATH%:}
+    fi
+    # Add the new virtualenv to the start of PATH
+    PATH="$venv_dir/bin:$PATH"
+}
+
 
 function _maybeworkon() {
     local venv_dir="$1"
@@ -86,9 +99,8 @@ function _maybeworkon() {
         DEFAULT_MESSAGE_FORMAT="${DEFAULT_MESSAGE_FORMAT/🐍/}"
     fi
 
-    # Don't reactivate an already activated virtual environment
-    if [[ -z "$VIRTUAL_ENV" || "$venv_dir" != "$VIRTUAL_ENV" || "$venv_name" != "$(_get_venv_name $VIRTUAL_ENV $venv_type)" ]]; then
-
+    # Check if we need to activate or reactivate the virtualenv
+    if [[ -z "$VIRTUAL_ENV" || "$venv_name" != "$(_get_venv_name $VIRTUAL_ENV $venv_type)" || "$PATH" != "$venv_dir/bin"* ]]; then
         if [[ ! -d "$venv_dir" ]]; then
             printf "Unable to find ${AUTOSWITCH_PURPLE}$venv_name${AUTOSWITCH_NORMAL} virtualenv\n"
             printf "If the issue persists run ${AUTOSWITCH_PURPLE}rmvenv && mkvenv${AUTOSWITCH_NORMAL} in this directory\n"
@@ -103,15 +115,15 @@ function _maybeworkon() {
         _autoswitch_message "${message}\n"
 
         # If we are using pipenv and activate its virtual environment - turn down its verbosity
-        # to prevent users seeing " Pipenv found itself running within a virtual environment" warning
         if [[ "$venv_type" == "pipenv" && "$PIPENV_VERBOSITY" != -1 ]]; then
             export PIPENV_VERBOSITY=-1
         fi
 
-        # Much faster to source the activate file directly rather than use the `workon` command
         local activate_script="$venv_dir/bin/activate"
-
         _validated_source "$activate_script"
+
+        # Ensure the virtualenv's bin directory is at the start of PATH
+        _ensure_virtualenv_path
     fi
 }
 
